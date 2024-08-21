@@ -1,0 +1,88 @@
+import cv2
+import mediapipe as mp
+import random
+
+mp_drawing = mp.solutions.drawing_utils #imports utility library
+mp_hands = mp.solutions.hands #imports "hands"
+
+#global constants and window
+window_name = 'Moving Circle'
+window_width = 640
+window_height = 480
+circle_radius = 30
+
+#start circle position
+circle_x = window_width // 2
+circle_y = window_height // 2
+color_C = (0, 255, 0)  # Initial circle color (green)
+
+# Initialize finger status array
+finger_status = [0, 0, 0, 0, 0]
+
+#Function to update circle position based on finger status
+def update_circle_position():
+    global circle_y, color_C
+    if finger_status == [0, 1, 0, 0, 0]:
+        circle_y -= 5  #Move circle up
+    elif finger_status == [0, 1, 1, 0, 0]:
+        circle_y += 5  #move circle down
+    elif finger_status == [1, 1, 1, 1, 1]:
+        color_C = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))  #party time if hand is open
+    else:
+        color_C = (0, 255, 0)  #reset
+
+#Function to draw circle on image
+def draw_circle(image):
+    cv2.circle(image, (circle_x, circle_y), circle_radius, color_C, -1)
+
+cap = cv2.VideoCapture(0) #initialize camera
+hands = mp_hands.Hands() #initialize hand
+
+while True: #while loop that runs the code no matter an error
+    ret, image = cap.read()
+    if not ret:
+        continue
+
+    image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB) #flip the image, Indian guy told me to
+    results = hands.process(image)  #hand landmark detection
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR) #conversion to RGB
+
+    finger_status = [0, 0, 0, 0, 0]  # Reset finger status array
+    #Fx:
+    #[0, 0, 0, 0, 0]for fist or no fingers is extended
+    #[1, 0, 0, 0, 0] for thumb
+    #[0, 1, 0, 0, 0] for index finger and so on
+
+    if results.multi_hand_landmarks:
+        for hand_landmarks in results.multi_hand_landmarks:
+            # Check thumb
+            if hand_landmarks.landmark[4].y < hand_landmarks.landmark[3].y and hand_landmarks.landmark[4].x < hand_landmarks.landmark[3].x:
+                finger_status[0] = 1
+            # Check index finger
+            if hand_landmarks.landmark[8].y < hand_landmarks.landmark[5].y:
+                finger_status[1] = 1
+            # Check middle finger
+            if hand_landmarks.landmark[12].y < hand_landmarks.landmark[9].y:
+                finger_status[2] = 1
+            # Check ring finger
+            if hand_landmarks.landmark[16].y < hand_landmarks.landmark[13].y:
+                finger_status[3] = 1
+            # Check pinky finger
+            if hand_landmarks.landmark[20].y < hand_landmarks.landmark[17].y:
+                finger_status[4] = 1
+
+            mp_drawing.draw_landmarks(
+                image,
+                hand_landmarks,
+                mp_hands.HAND_CONNECTIONS)
+
+    update_circle_position()  # Update circle position and color based on finger status
+    draw_circle(image)  # Draw circle on image
+
+    #display the results in a window
+    cv2.imshow(window_name, image)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
